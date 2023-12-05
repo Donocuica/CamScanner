@@ -2,8 +2,11 @@ package com.example.camscanner;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
@@ -21,11 +24,13 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.widget.PopupMenu;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.RecyclerView;
 
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
@@ -35,6 +40,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.util.ArrayList;
 
 public class ImageListFragment extends Fragment {
 
@@ -48,6 +54,12 @@ public class ImageListFragment extends Fragment {
 
     private Uri imageUri = null ;
     private FloatingActionButton addImageFab;
+    private RecyclerView imagesRv;
+
+    private ArrayList<ModelImage> allimageArrayList;
+    private AdapterImage adapterImage;
+
+
 
     private Context mContext;
 
@@ -74,14 +86,180 @@ public class ImageListFragment extends Fragment {
         storagePermissions = new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE};
 
         addImageFab = view.findViewById(R.id.addImageFab);
+        imagesRv = view.findViewById(R.id.imagesRv);
+
+        loadImages();
 
         addImageFab.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View view) {
+            public void onClick(View v) {
                 showInputImageDialog();
 
             }
         });
+
+    }
+
+   @Override
+   public void onCreate(@NonNull Bundle savedInstanceState){
+        super.onCreate(savedInstanceState);
+
+        setHasOptionsMenu(true);
+   }
+
+    @Override
+    public void onCreateOptionsMenu(@NonNull Menu menu, @NonNull MenuInflater inflater) {
+        inflater.inflate(R.menu.menu_images,menu);
+        super.onCreateOptionsMenu(menu, inflater);
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+
+
+        int itemId = item.getItemId();
+        if(itemId == R.id.images_item_delete){
+            AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
+            builder.setTitle("Delete Images")
+                    .setMessage("Are you sure you want to delete All/Selected images?")
+                    .setPositiveButton("Delete All", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            deleteImages(true);
+                        }
+                    })
+                    .setNeutralButton("Delete Selected", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+
+                            deleteImages(false);
+                        }
+                    })
+                    .setNeutralButton("Cancel", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+
+                            dialog.dismiss();
+                        }
+                    })
+                    .show();
+
+        }
+
+        else if (itemId == R.id.image_item_pdf){
+            AlertDialog.Builder builder = new AlertDialog.Builder(mContext);
+            builder.setTitle("Convert to PDF")
+                    .setMessage("Convert All/Selected Images to PDF")
+                    .setPositiveButton("CONVERT ALL", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+
+                            convertImagesTpPdf(true);
+
+                        }
+                    })
+                    .setNeutralButton("CONVERT SELECTED", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+
+                        }
+                    })
+                    .setNegativeButton("CANCEL", new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+
+                        }
+                    })
+                    .show();
+        }
+
+        return super.onOptionsItemSelected(item);
+    }
+
+
+    private void convertImagesTpPdf(boolean converAll){
+
+    }
+
+
+    private void deleteImages(boolean deleteAll){
+
+        ArrayList<ModelImage> imagesToDeleteList = new ArrayList<>();
+        if (deleteAll){
+
+            imagesToDeleteList = allimageArrayList;
+
+        }
+        else {
+
+            for (int i = 0; i<allimageArrayList.size(); i++){
+                if (allimageArrayList.get(i).isChecked()){
+                    imagesToDeleteList.add(allimageArrayList.get(i));
+                }
+            }
+        }
+        for (int i=0; i<imagesToDeleteList.size();i++){
+            try {
+                String pathOfImageToDelete = imagesToDeleteList.get(i).getImageUri().getPath();
+                File file = new File(pathOfImageToDelete);
+                if (file.exists()){
+                    boolean isDeleted = file.delete();
+                    Log.d(TAG, "deleteImages: isDelete"+isDeleted);
+
+                }
+
+            }
+            catch (Exception e){
+                Log.d(TAG, "deleteImages: ",e);
+            }
+        }
+        Toast.makeText(mContext, "Deleted", Toast.LENGTH_SHORT).show();
+        loadImages();
+    }
+
+
+    private void  loadImages(){
+        Log.d(TAG, "loadImages: ");
+
+        allimageArrayList = new ArrayList<>();
+        adapterImage = new AdapterImage(mContext,allimageArrayList);
+
+
+        imagesRv.setAdapter(adapterImage);
+
+        File folder = new File(mContext.getExternalFilesDir(null),Constants.IMAGES_FOLDER);
+
+        if (folder.exists()){
+
+            Log.d(TAG, "loadImages: folder exists");
+
+            File[] files = folder.listFiles();
+
+            if ( files != null){
+
+                Log.d(TAG, "loadImages: Folder exists and have images");
+                
+                for (File file: files){
+                    Log.d(TAG, "loadImages: fileName: "+file.getName());
+
+                    Uri imageUri = Uri.fromFile(file);
+
+                    ModelImage modelImage = new ModelImage(imageUri,false);
+
+                    allimageArrayList.add(modelImage);
+                    adapterImage.notifyItemInserted(allimageArrayList.size());
+                }
+
+            }
+            else {
+                Log.d(TAG, "loadImages: Folder exists but empty");
+            }
+
+        }
+
+        else {
+            Log.d(TAG, "loadImages: Folder doesn't exists");
+        }
 
     }
 
@@ -199,6 +377,10 @@ public class ImageListFragment extends Fragment {
 
                         saveImageToAppLevelDirectory(imageUri);
 
+                        ModelImage modelImage = new ModelImage(imageUri,false);
+                        allimageArrayList.add(modelImage);
+                        adapterImage.notifyItemInserted(allimageArrayList.size());
+
                     }
                     else {
                         Toast.makeText(mContext, "Cancelled..", Toast.LENGTH_SHORT).show();
@@ -233,6 +415,11 @@ public class ImageListFragment extends Fragment {
 
                         Log.d(TAG, "onActivityResult: Picked image camera:"+imageUri);
                         saveImageToAppLevelDirectory(imageUri);
+
+                        ModelImage modelImage = new ModelImage(imageUri,false);
+                        allimageArrayList.add(modelImage);
+                        adapterImage.notifyItemInserted(allimageArrayList.size());
+
 
                     }
                     else {
