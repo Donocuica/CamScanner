@@ -1,4 +1,4 @@
-package com.example.camscanner;
+package com.example.camscanner.ui.image;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -7,6 +7,7 @@ import android.util.Log;
 import android.widget.ImageView;
 
 import com.bumptech.glide.Glide;
+import com.example.camscanner.R;
 
 public class ImageViewActivity extends AppCompatActivity {
 

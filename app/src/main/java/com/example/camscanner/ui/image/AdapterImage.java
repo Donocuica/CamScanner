@@ -1,4 +1,4 @@
-package com.example.camscanner;
+package com.example.camscanner.ui.image;
 
 import android.content.Context;
 import android.content.Intent;
@@ -14,6 +14,7 @@ import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.bumptech.glide.Glide;
+import com.example.camscanner.R;
 import com.example.camscanner.models.ModelImage;
 
 import java.util.ArrayList;
@@ -57,7 +58,7 @@ public class AdapterImage extends RecyclerView.Adapter<AdapterImage.HolderImage>
             @Override
             public void onClick(View v) {
 
-                Intent intent = new Intent(context,ImageViewActivity.class);
+                Intent intent = new Intent(context, ImageViewActivity.class);
                 intent.putExtra("imageUri",""+imageUri);
                 context.startActivity(intent);
 

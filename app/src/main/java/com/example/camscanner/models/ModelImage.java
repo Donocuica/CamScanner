@@ -1,4 +1,4 @@
-package com.example.camscanner;
+package com.example.camscanner.models;
 
 import android.net.Uri;
 
