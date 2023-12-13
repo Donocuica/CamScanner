@@ -3,14 +3,18 @@ package com.example.camscanner;
 import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.app.Dialog;
+import android.app.ProgressDialog;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ImageDecoder;
+import android.graphics.Paint;
+import android.graphics.pdf.PdfDocument;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -26,6 +30,8 @@ import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.RecyclerView;
 
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.LayoutInflater;
@@ -36,11 +42,14 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Toast;
 
+import com.example.camscanner.models.ModelImage;
 import com.google.android.material.floatingactionbutton.FloatingActionButton;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.util.ArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class ImageListFragment extends Fragment {
 
@@ -58,6 +67,10 @@ public class ImageListFragment extends Fragment {
 
     private ArrayList<ModelImage> allimageArrayList;
     private AdapterImage adapterImage;
+
+    private ProgressDialog progressDialog;
+
+    
 
 
 
@@ -87,6 +100,11 @@ public class ImageListFragment extends Fragment {
 
         addImageFab = view.findViewById(R.id.addImageFab);
         imagesRv = view.findViewById(R.id.imagesRv);
+
+        progressDialog = new ProgressDialog(mContext);
+        progressDialog.setTitle("Please wait");
+        progressDialog.setCanceledOnTouchOutside(false);
+
 
         loadImages();
 
@@ -155,29 +173,123 @@ public class ImageListFragment extends Fragment {
                         public void onClick(DialogInterface dialog, int which) {
 
                             convertImagesTpPdf(true);
-
                         }
                     })
                     .setNeutralButton("CONVERT SELECTED", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-
+                            convertImagesTpPdf(false);
                         }
                     })
                     .setNegativeButton("CANCEL", new DialogInterface.OnClickListener() {
                         @Override
                         public void onClick(DialogInterface dialog, int which) {
-
+                            dialog.dismiss();
                         }
                     })
                     .show();
         }
-
         return super.onOptionsItemSelected(item);
     }
 
 
     private void convertImagesTpPdf(boolean converAll){
+        Log.d(TAG, "convertImagesTpPdf: converAll: "+converAll);
+
+        progressDialog.setMessage("Converting to PDF..");
+        progressDialog.show();
+
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        Handler handler = new Handler(Looper.getMainLooper());
+
+        executorService.execute(new Runnable() {
+            private float of;
+
+            @Override
+            public void run() {
+                Log.d(TAG, "run: BG work start....");
+
+                ArrayList<ModelImage> imagesToPdfList = new ArrayList<>();
+                if (converAll){
+                    imagesToPdfList = allimageArrayList;
+                }
+                else {
+                    for (int i = 0; i < allimageArrayList.size();i++){
+                        if (allimageArrayList.get(i).isChecked()){
+                            imagesToPdfList.add(allimageArrayList.get(i));
+                        }
+                    }
+                }
+
+                Log.d(TAG, "run: imagesToPdfList size:" + imagesToPdfList.size());
+                try {
+
+                    File root = new File(mContext.getExternalFilesDir(null), Constants.PDF_FOLDER);
+                    root.mkdirs();
+
+                    long timestamp = System.currentTimeMillis();
+                    String fileName = "PDF" + timestamp + ".pdf";
+
+                    Log.d(TAG, "run: fileName:"+fileName);
+
+                    File file = new File(root,fileName);
+
+                    FileOutputStream fileOutputStream = new FileOutputStream(file);
+                    PdfDocument pdfDocument = new PdfDocument();
+
+                    for (int i = 0; i<imagesToPdfList.size(); i++){
+                        Uri imageToAdInPdfUri = imagesToPdfList.get(i).getImageUri();
+
+                        try {
+
+                            Bitmap bitmap;
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                                bitmap = ImageDecoder.decodeBitmap(ImageDecoder.createSource(mContext.getContentResolver(),imageToAdInPdfUri));
+                            }
+                            else {
+                                bitmap = MediaStore.Images.Media.getBitmap(mContext.getContentResolver(),imageToAdInPdfUri);
+                            }
+
+                            bitmap = bitmap.copy(Bitmap.Config.ARGB_8888,false);
+                            PdfDocument.PageInfo pageInfo = new PdfDocument.PageInfo.Builder(bitmap.getWidth(),bitmap.getHeight(),i+1).create();
+                            PdfDocument.Page page = pdfDocument.startPage(pageInfo);
+
+
+                            Paint paint = new Paint();
+                            paint.setColor(Color.WHITE);
+
+                            Canvas canvas = page.getCanvas();
+                            canvas.drawPaint(paint);
+                            canvas.drawBitmap(bitmap,of,of,null);
+
+                            pdfDocument.finishPage(page);
+                            bitmap.recycle();
+                        }
+                        catch (Exception e){
+
+                            Log.d(TAG, "run: ",e);
+                        }
+                    }
+
+                    pdfDocument.writeTo(fileOutputStream);
+                    pdfDocument.close();
+                }
+                catch (Exception e){
+                    progressDialog.dismiss();
+                    Log.d(TAG, "run: " ,e);
+                }
+                handler.post(new Runnable() {
+                    @Override
+                    public void run() {
+                        Log.d(TAG, "run: Converted");
+                        progressDialog.dismiss();
+                        Toast.makeText(mContext, "Converted", Toast.LENGTH_SHORT).show();
+
+                    }
+                });
+                
+            }
+        });
 
     }
 
